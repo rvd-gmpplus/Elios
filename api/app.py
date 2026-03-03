@@ -64,8 +64,12 @@ APP_NAME = "CBV2 RAG API"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 # Load source URL mapping from sources.csv (title → original GMP+ website URL)
+# Builds two lookups: exact title match and document code prefix match (e.g. "CR3.0", "S9.92")
+_DOC_CODE_RE = re.compile(r"^([A-Z]+\s?\d+\.\d+)")
+
 def _load_source_urls():
-    mapping = {}
+    by_title = {}
+    by_code = {}
     csv_path = Path(__file__).resolve().parent.parent / "sources.csv"
     try:
         with open(csv_path, newline="", encoding="utf-8") as f:
@@ -73,12 +77,27 @@ def _load_source_urls():
                 title = (row.get("title") or "").strip()
                 url = (row.get("url") or "").strip()
                 if title and url:
-                    mapping[title] = url
+                    by_title[title] = url
+                    m = _DOC_CODE_RE.match(title)
+                    if m:
+                        by_code[m.group(1).replace(" ", "")] = url
     except FileNotFoundError:
         pass
-    return mapping
+    return by_title, by_code
 
-SOURCE_URLS = _load_source_urls()
+SOURCE_URLS, SOURCE_URLS_BY_CODE = _load_source_urls()
+
+def _resolve_source_url(title: str, fallback: str) -> str:
+    """Look up the original GMP+ URL by exact title, then by doc code prefix, then fallback."""
+    url = SOURCE_URLS.get(title)
+    if url:
+        return url
+    m = _DOC_CODE_RE.match(title)
+    if m:
+        url = SOURCE_URLS_BY_CODE.get(m.group(1).replace(" ", ""))
+        if url:
+            return url
+    return fallback
 
 # =========================
 # Helpers
@@ -182,7 +201,7 @@ def as_context(matches: List[Dict[str, Any]], max_chars: int = 12000) -> Tuple[s
         md = _md(m)
         title = md.get("doc_title", "")
         path = md.get("section_path", "")
-        url   = SOURCE_URLS.get(title, md.get("url", ""))
+        url   = _resolve_source_url(title, md.get("url", ""))
         text = _text_from_md(md)
 
         header = f"[{title} — {path}]"
