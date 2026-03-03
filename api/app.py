@@ -4,11 +4,14 @@ import os, sys, json, time, uuid, re, logging, contextvars
 from typing import List, Dict, Any, Optional, Tuple
 
 from fastapi import FastAPI, HTTPException, Header, Query, Request
+from fastapi.responses import FileResponse
+from pathlib import Path
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from pinecone import Pinecone
 from openai import OpenAI
 from starlette.middleware.base import BaseHTTPMiddleware
+from src.indexing.build_payload import bm25_sparser, _term_to_id
 
 load_dotenv()  # handy for local dev
 
@@ -57,6 +60,7 @@ index = pc.Index(PINECONE_INDEX)
 ocli = OpenAI(api_key=OPENAI_API_KEY)
 
 APP_NAME = "CBV2 RAG API"
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 # =========================
 # Helpers
@@ -82,6 +86,16 @@ def _auth_check(auth_header: Optional[str]):
 def embed(texts: List[str]) -> List[List[float]]:
     resp = ocli.embeddings.create(model="text-embedding-3-large", input=texts)
     return [d.embedding for d in resp.data]
+
+def _sparse_vector(query: str):
+    """Build Pinecone sparse_vector dict from BM25 term weights, or None."""
+    try:
+        sw = bm25_sparser(query)
+        if sw:
+            return {"indices": [_term_to_id(t) for t in sw], "values": list(sw.values())}
+    except Exception:
+        pass
+    return None
 
 def _md(m: Dict[str, Any]) -> Dict[str, Any]:
     return (m.get("metadata") or {})
@@ -194,6 +208,62 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(RequestContextMiddleware)
 
+# ---------- Web UI ----------
+@app.get("/", response_class=FileResponse, include_in_schema=False)
+def web_ui():
+    return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
+
+class WebAskPayload(BaseModel):
+    question: str = Field(..., min_length=1, max_length=500)
+
+class WebAskSource(BaseModel):
+    title: str = ""
+    section: str = ""
+    url: str = ""
+
+class WebAskResponse(BaseModel):
+    answer: str
+    sources: list[WebAskSource]
+
+@app.post("/web/ask", response_model=WebAskResponse, include_in_schema=False)
+def web_ask(payload: WebAskPayload):
+    question = payload.question.strip()
+
+    log.info("WebAsk | q='%s'", _singleline(question))
+
+    # 1) Embed (dense only, no hybrid for public)
+    qvec = embed([question])[0]
+
+    # 2) Pinecone query with safe defaults
+    res = index.query(
+        vector=qvec,
+        top_k=24,
+        namespace=PINECONE_NAMESPACE,
+        include_metadata=True,
+        include_values=False,
+    )
+    matches = res.get("matches", []) or []
+    matches = [m for m in matches if (m.get("score") or 0.0) >= 0.28]
+    matches = [m for m in matches if _has_body(m)]
+
+    # 3) Rerank top 12
+    if matches:
+        head = matches[:12]
+        tail = matches[12:]
+        head = rerank_with_llm(question, head)
+        matches = head + tail
+
+    # 4) Build context and answer
+    context, cites = as_context(matches)
+    ans = answer_with_openai(question, context)
+
+    sources = [
+        WebAskSource(title=c.get("title", ""), section=c.get("section", ""), url=c.get("url", ""))
+        for c in cites
+    ]
+
+    return WebAskResponse(answer=ans, sources=sources)
+
 # ---------- Models ----------
 class QueryPayload(BaseModel):
     question: Optional[str] = None
@@ -209,6 +279,7 @@ class DebugRequest(BaseModel):
     top_k: int = Field(24, ge=1, le=50)
     rerank_top: int = Field(12, ge=1, le=50)
     use_rerank: bool = True
+    use_hybrid: bool = False
     namespace: Optional[str] = None
     min_score: Optional[float] = Field(None, ge=0.0, le=1.0)
     include_text: bool = True
@@ -239,6 +310,7 @@ def health():
 def search(
     q: str = Query(..., min_length=1, description="Search query"),
     top_k: int = Query(10, ge=1, le=50),
+    use_hybrid: bool = Query(False),
     namespace: Optional[str] = Query(None),
     min_score: Optional[float] = Query(None, ge=0.0, le=1.0),
     authorization: Optional[str] = Header(None)
@@ -246,13 +318,15 @@ def search(
     _auth_check(authorization)
     ns = namespace or PINECONE_NAMESPACE
 
-    log.info("Search | q='%s' | top_k=%s | min_score=%s | ns=%s", _singleline(q), top_k, min_score, ns)
+    log.info("Search | q='%s' | top_k=%s | use_hybrid=%s | min_score=%s | ns=%s", _singleline(q), top_k, use_hybrid, min_score, ns)
 
     t0 = time.perf_counter()
     qvec = embed([q])[0]
+    sparse = _sparse_vector(q) if use_hybrid else None
     t1 = time.perf_counter()
     res = index.query(
         vector=qvec,
+        sparse_vector=sparse,
         top_k=top_k,
         namespace=ns,
         include_metadata=True,
@@ -329,11 +403,12 @@ def retrieve(payload: QueryPayload, authorization: Optional[str] = Header(None))
     ns = payload.namespace or PINECONE_NAMESPACE
 
     log.info(
-        "RetrieveReq | q='%s' | top_k=%s | rerank_top=%s | use_rerank=%s | min_score=%s | ns=%s",
+        "RetrieveReq | q='%s' | top_k=%s | rerank_top=%s | use_rerank=%s | use_hybrid=%s | min_score=%s | ns=%s",
         _singleline(payload.question),
         payload.top_k,
         payload.rerank_top,
         payload.use_rerank,
+        payload.use_hybrid,
         payload.min_score,
         ns,
     )
@@ -341,11 +416,13 @@ def retrieve(payload: QueryPayload, authorization: Optional[str] = Header(None))
     # 1) Embed
     t0 = time.perf_counter()
     qvec = embed([payload.question])[0]
+    sparse = _sparse_vector(payload.question) if payload.use_hybrid else None
     t1 = time.perf_counter()
 
     # 2) Pinecone
     res = index.query(
         vector=qvec,
+        sparse_vector=sparse,
         top_k=payload.top_k,
         namespace=ns,
         include_metadata=True,
@@ -440,11 +517,12 @@ def answer(payload: QueryPayload, authorization: Optional[str] = Header(None)):
     ns = payload.namespace or PINECONE_NAMESPACE
 
     log.info(
-        "AnswerReq | q='%s' | top_k=%s | rerank_top=%s | use_rerank=%s | min_score=%s | ns=%s",
+        "AnswerReq | q='%s' | top_k=%s | rerank_top=%s | use_rerank=%s | use_hybrid=%s | min_score=%s | ns=%s",
         _singleline(payload.question),
         payload.top_k,
         payload.rerank_top,
         payload.use_rerank,
+        payload.use_hybrid,
         payload.min_score,
         ns,
     )
@@ -452,11 +530,13 @@ def answer(payload: QueryPayload, authorization: Optional[str] = Header(None)):
     # 1) Embed
     t0 = time.perf_counter()
     qvec = embed([payload.question])[0]
+    sparse = _sparse_vector(payload.question) if payload.use_hybrid else None
     t1 = time.perf_counter()
 
     # 2) Pinecone
     res = index.query(
         vector=qvec,
+        sparse_vector=sparse,
         top_k=payload.top_k,
         namespace=ns,
         include_metadata=True,
@@ -556,6 +636,7 @@ def debug(payload: DebugRequest, authorization: Optional[str] = Header(None)):
                 "top_k": payload.top_k,
                 "rerank_top": payload.rerank_top,
                 "use_rerank": payload.use_rerank,
+                "use_hybrid": payload.use_hybrid,
                 "min_score": payload.min_score,
                 "include_text": payload.include_text,
                 "snippet_chars": payload.snippet_chars,
@@ -571,11 +652,12 @@ def debug(payload: DebugRequest, authorization: Optional[str] = Header(None)):
     ns = payload.namespace or PINECONE_NAMESPACE
 
     log.info(
-        "DebugReq | q='%s' | top_k=%s | rerank_top=%s | use_rerank=%s | min_score=%s | ns=%s",
+        "DebugReq | q='%s' | top_k=%s | rerank_top=%s | use_rerank=%s | use_hybrid=%s | min_score=%s | ns=%s",
         _singleline(payload.question),
         payload.top_k,
         payload.rerank_top,
         payload.use_rerank,
+        payload.use_hybrid,
         payload.min_score,
         ns,
     )
@@ -583,11 +665,13 @@ def debug(payload: DebugRequest, authorization: Optional[str] = Header(None)):
     # 1) Embed
     t0 = time.perf_counter()
     qvec = embed([payload.question])[0]
+    sparse = _sparse_vector(payload.question) if payload.use_hybrid else None
     t1 = time.perf_counter()
 
     # 2) Pinecone
     res = index.query(
         vector=qvec,
+        sparse_vector=sparse,
         top_k=payload.top_k,
         namespace=ns,
         include_metadata=True,
@@ -684,6 +768,7 @@ def debug(payload: DebugRequest, authorization: Optional[str] = Header(None)):
             "top_k": payload.top_k,
             "rerank_top": payload.rerank_top,
             "use_rerank": payload.use_rerank,
+            "use_hybrid": payload.use_hybrid,
             "min_score": payload.min_score,
             "include_text": payload.include_text,
             "snippet_chars": payload.snippet_chars,

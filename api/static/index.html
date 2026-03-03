@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Elios — GMP+ Document Assistant</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #f5f5f5; color: #222; line-height: 1.5;
+  }
+  .container { max-width: 800px; margin: 0 auto; padding: 16px; }
+
+  /* Header */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 0; border-bottom: 2px solid #2E7D32; margin-bottom: 24px;
+  }
+  .header h1 { font-size: 1.4rem; color: #2E7D32; }
+  .gear-btn {
+    background: none; border: none; cursor: pointer; font-size: 1.4rem;
+    color: #666; transition: color 0.2s;
+  }
+  .gear-btn:hover { color: #2E7D32; }
+
+  /* Search */
+  .search-box { margin-bottom: 24px; }
+  .search-box textarea {
+    width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px;
+    font-size: 1rem; font-family: inherit; resize: vertical; min-height: 60px;
+  }
+  .search-box textarea:focus { outline: none; border-color: #2E7D32; }
+  .search-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+  .ask-btn {
+    padding: 10px 24px; background: #2E7D32; color: #fff; border: none;
+    border-radius: 6px; font-size: 1rem; cursor: pointer; transition: background 0.2s;
+  }
+  .ask-btn:hover { background: #1B5E20; }
+  .ask-btn:disabled { background: #999; cursor: not-allowed; }
+  .char-count { font-size: 0.8rem; color: #888; }
+
+  /* Spinner */
+  .spinner { display: inline-block; margin-left: 12px; }
+  .spinner::after {
+    content: ""; display: inline-block; width: 18px; height: 18px;
+    border: 2px solid #2E7D32; border-top-color: transparent; border-radius: 50%;
+    animation: spin 0.6s linear infinite; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Answer panel */
+  .answer-panel {
+    background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .answer-panel h3 { color: #2E7D32; margin-bottom: 8px; font-size: 1rem; }
+  .answer-text { white-space: pre-wrap; }
+
+  /* Source cards */
+  .sources-heading { font-size: 1rem; color: #2E7D32; margin-bottom: 8px; }
+  .source-card {
+    background: #fff; border-radius: 6px; padding: 12px 16px; margin-bottom: 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08); border-left: 3px solid #2E7D32;
+  }
+  .source-card .title { font-weight: 600; }
+  .source-card .section { font-size: 0.85rem; color: #555; }
+  .source-card a { color: #2E7D32; font-size: 0.85rem; }
+
+  /* Error */
+  .error-msg {
+    background: #FFEBEE; color: #C62828; border-radius: 6px; padding: 12px 16px;
+    margin-bottom: 16px;
+  }
+
+  /* Admin */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: center; z-index: 100;
+  }
+  .modal {
+    background: #fff; border-radius: 8px; padding: 24px; width: 360px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  }
+  .modal h2 { color: #2E7D32; margin-bottom: 12px; font-size: 1.1rem; }
+  .modal input {
+    width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px;
+    font-size: 1rem; margin-bottom: 12px;
+  }
+  .modal input:focus { outline: none; border-color: #2E7D32; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .btn-secondary {
+    padding: 8px 16px; border: 1px solid #ccc; background: #fff; border-radius: 6px;
+    cursor: pointer; font-size: 0.9rem;
+  }
+  .btn-primary {
+    padding: 8px 16px; background: #2E7D32; color: #fff; border: none;
+    border-radius: 6px; cursor: pointer; font-size: 0.9rem;
+  }
+  .btn-primary:disabled { background: #999; }
+  .btn-danger {
+    padding: 8px 16px; background: #C62828; color: #fff; border: none;
+    border-radius: 6px; cursor: pointer; font-size: 0.9rem;
+  }
+
+  /* Admin panels */
+  .admin-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #E8F5E9; padding: 8px 12px; border-radius: 6px; margin-bottom: 16px;
+  }
+  .admin-bar span { font-weight: 600; color: #2E7D32; }
+
+  .health-panel {
+    background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .health-panel h3 { color: #2E7D32; margin-bottom: 8px; }
+  .health-ok { color: #2E7D32; font-weight: 600; }
+  .health-err { color: #C62828; font-weight: 600; }
+
+  /* Debug form */
+  .debug-form {
+    background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .debug-form h3 { color: #2E7D32; margin-bottom: 12px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-bottom: 12px; }
+  .form-field label { display: block; font-size: 0.85rem; color: #555; margin-bottom: 2px; }
+  .form-field input[type="number"],
+  .form-field input[type="text"] {
+    width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem;
+  }
+  .form-field input:focus { outline: none; border-color: #2E7D32; }
+  .checkbox-row { display: flex; gap: 16px; align-items: center; margin-bottom: 12px; }
+  .checkbox-row label { font-size: 0.9rem; display: flex; align-items: center; gap: 4px; }
+
+  /* Debug tables */
+  .debug-results { margin-bottom: 16px; }
+  .debug-results h4 { color: #2E7D32; margin-bottom: 8px; }
+  .debug-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-bottom: 16px; }
+  .debug-table th {
+    background: #2E7D32; color: #fff; padding: 6px 8px; text-align: left; font-weight: 600;
+  }
+  .debug-table td { padding: 6px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+  .debug-table tr:nth-child(even) td { background: #FAFAFA; }
+  .debug-table .text-cell { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .context-preview {
+    background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .context-preview h4 { color: #2E7D32; margin-bottom: 8px; }
+  .context-preview pre {
+    white-space: pre-wrap; font-size: 0.82rem; max-height: 300px; overflow-y: auto;
+    background: #F5F5F5; padding: 12px; border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+function App() {
+  // Public state
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState(null);
+  const [sources, setSources] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Admin state
+  const [adminMode, setAdminMode] = useState(false);
+  const [token, setToken] = useState(null);
+  const [showTokenModal, setShowTokenModal] = useState(false);
+  const [tokenInput, setTokenInput] = useState("");
+  const [tokenError, setTokenError] = useState(null);
+  const [tokenValidating, setTokenValidating] = useState(false);
+
+  // Health state
+  const [health, setHealth] = useState(null);
+  const [healthError, setHealthError] = useState(null);
+  const healthInterval = useRef(null);
+
+  // Debug state
+  const [debugForm, setDebugForm] = useState({
+    question: "", top_k: 24, rerank_top: 12, use_rerank: true,
+    use_hybrid: false, min_score: 0.28, include_text: true, snippet_chars: 700,
+  });
+  const [debugResult, setDebugResult] = useState(null);
+  const [debugLoading, setDebugLoading] = useState(false);
+  const [debugError, setDebugError] = useState(null);
+
+  // --- Public Q&A ---
+  async function handleAsk() {
+    if (!question.trim() || loading) return;
+    setLoading(true);
+    setError(null);
+    setAnswer(null);
+    setSources([]);
+    try {
+      const res = await fetch("/web/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: question.trim() }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `Error ${res.status}`);
+      }
+      const data = await res.json();
+      setAnswer(data.answer);
+      setSources(data.sources || []);
+    } catch (e) {
+      setError(e.message || "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleAsk();
+    }
+  }
+
+  // --- Admin toggle ---
+  function handleGearClick() {
+    if (adminMode) return; // already in admin, do nothing
+    if (token) {
+      setAdminMode(true);
+    } else {
+      setShowTokenModal(true);
+    }
+  }
+
+  async function validateToken() {
+    if (!tokenInput.trim()) return;
+    setTokenValidating(true);
+    setTokenError(null);
+    try {
+      const res = await fetch("/health", {
+        headers: { Authorization: `Bearer ${tokenInput.trim()}` },
+      });
+      if (res.ok) {
+        setToken(tokenInput.trim());
+        setShowTokenModal(false);
+        setTokenInput("");
+        setAdminMode(true);
+      } else {
+        setTokenError("Invalid token");
+      }
+    } catch {
+      setTokenError("Connection failed");
+    } finally {
+      setTokenValidating(false);
+    }
+  }
+
+  function handleLogout() {
+    setToken(null);
+    setAdminMode(false);
+    setHealth(null);
+    setHealthError(null);
+    setDebugResult(null);
+    if (healthInterval.current) clearInterval(healthInterval.current);
+  }
+
+  // --- Health ---
+  const fetchHealth = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch("/health", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setHealth(await res.json());
+        setHealthError(null);
+      } else {
+        setHealthError(`Status ${res.status}`);
+      }
+    } catch {
+      setHealthError("Connection failed");
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (adminMode && token) {
+      fetchHealth();
+      healthInterval.current = setInterval(fetchHealth, 30000);
+      return () => clearInterval(healthInterval.current);
+    }
+  }, [adminMode, token, fetchHealth]);
+
+  // --- Debug ---
+  function updateDebugField(field, value) {
+    setDebugForm(prev => ({ ...prev, [field]: value }));
+  }
+
+  async function handleDebug() {
+    if (!debugForm.question.trim() || debugLoading) return;
+    setDebugLoading(true);
+    setDebugError(null);
+    setDebugResult(null);
+    try {
+      const body = {
+        question: debugForm.question.trim(),
+        top_k: Number(debugForm.top_k),
+        rerank_top: Number(debugForm.rerank_top),
+        use_rerank: debugForm.use_rerank,
+        use_hybrid: debugForm.use_hybrid,
+        min_score: Number(debugForm.min_score),
+        include_text: debugForm.include_text,
+        snippet_chars: Number(debugForm.snippet_chars),
+      };
+      const res = await fetch("/debug", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || `Error ${res.status}`);
+      }
+      setDebugResult(await res.json());
+    } catch (e) {
+      setDebugError(e.message || "Debug query failed");
+    } finally {
+      setDebugLoading(false);
+    }
+  }
+
+  // --- Render helpers ---
+  function renderDebugTable(title, rows, showRerank) {
+    if (!rows || rows.length === 0) return null;
+    return (
+      <div>
+        <h4>{title}</h4>
+        <table className="debug-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>ID</th>
+              <th>Pinecone</th>
+              {showRerank && <th>Rerank</th>}
+              <th>Title</th>
+              <th>Section</th>
+              {rows[0].text !== undefined && <th>Text</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i}>
+                <td>{i + 1}</td>
+                <td style={{fontSize:"0.75rem"}}>{r.id}</td>
+                <td>{r.pinecone != null ? r.pinecone.toFixed(4) : "—"}</td>
+                {showRerank && <td>{r.rerank != null ? r.rerank.toFixed(2) : "—"}</td>}
+                <td>{r.title || "—"}</td>
+                <td>{r.section || "—"}</td>
+                {r.text !== undefined && <td className="text-cell" title={r.text}>{r.text}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container">
+      {/* Header */}
+      <div className="header">
+        <h1>Elios &mdash; GMP+ Document Assistant</h1>
+        <button className="gear-btn" onClick={handleGearClick} title="Admin panel">&#9881;</button>
+      </div>
+
+      {/* Admin bar */}
+      {adminMode && (
+        <div className="admin-bar">
+          <span>Admin Mode</span>
+          <div style={{display:"flex",gap:"8px"}}>
+            <button className="btn-secondary" onClick={() => setAdminMode(false)}>Public View</button>
+            <button className="btn-danger" onClick={handleLogout}>Logout</button>
+          </div>
+        </div>
+      )}
+
+      {/* Token modal */}
+      {showTokenModal && (
+        <div className="modal-overlay" onClick={() => setShowTokenModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h2>Enter Admin Token</h2>
+            <input
+              type="password"
+              placeholder="Bearer token..."
+              value={tokenInput}
+              onChange={e => setTokenInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && validateToken()}
+              autoFocus
+            />
+            {tokenError && <div className="error-msg" style={{marginBottom:"12px"}}>{tokenError}</div>}
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => { setShowTokenModal(false); setTokenInput(""); setTokenError(null); }}>Cancel</button>
+              <button className="btn-primary" onClick={validateToken} disabled={tokenValidating || !tokenInput.trim()}>
+                {tokenValidating ? "Validating..." : "Connect"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin: Health panel */}
+      {adminMode && (
+        <div className="health-panel">
+          <h3>Health Status</h3>
+          {healthError ? (
+            <p className="health-err">{healthError}</p>
+          ) : health ? (
+            <div>
+              <p><span className="health-ok">OK</span></p>
+              <p style={{fontSize:"0.9rem",color:"#555"}}>Index: {health.index} &bull; Namespace: {health.namespace_default}</p>
+            </div>
+          ) : (
+            <p style={{color:"#888"}}>Loading...</p>
+          )}
+        </div>
+      )}
+
+      {/* Admin: Debug form */}
+      {adminMode && (
+        <div className="debug-form">
+          <h3>Debug Query</h3>
+          <div style={{marginBottom:"12px"}}>
+            <label style={{fontSize:"0.85rem",color:"#555"}}>Question</label>
+            <textarea
+              style={{width:"100%",padding:"8px",border:"1px solid #ccc",borderRadius:"4px",fontFamily:"inherit",fontSize:"0.9rem",minHeight:"50px",resize:"vertical"}}
+              value={debugForm.question}
+              onChange={e => updateDebugField("question", e.target.value)}
+              placeholder="Enter debug question..."
+            />
+          </div>
+          <div className="form-grid">
+            <div className="form-field">
+              <label>top_k</label>
+              <input type="number" min="1" max="50" value={debugForm.top_k} onChange={e => updateDebugField("top_k", e.target.value)} />
+            </div>
+            <div className="form-field">
+              <label>rerank_top</label>
+              <input type="number" min="1" max="50" value={debugForm.rerank_top} onChange={e => updateDebugField("rerank_top", e.target.value)} />
+            </div>
+            <div className="form-field">
+              <label>min_score</label>
+              <input type="number" min="0" max="1" step="0.01" value={debugForm.min_score} onChange={e => updateDebugField("min_score", e.target.value)} />
+            </div>
+            <div className="form-field">
+              <label>snippet_chars</label>
+              <input type="number" min="50" max="5000" value={debugForm.snippet_chars} onChange={e => updateDebugField("snippet_chars", e.target.value)} />
+            </div>
+          </div>
+          <div className="checkbox-row">
+            <label><input type="checkbox" checked={debugForm.use_rerank} onChange={e => updateDebugField("use_rerank", e.target.checked)} /> use_rerank</label>
+            <label><input type="checkbox" checked={debugForm.use_hybrid} onChange={e => updateDebugField("use_hybrid", e.target.checked)} /> use_hybrid</label>
+            <label><input type="checkbox" checked={debugForm.include_text} onChange={e => updateDebugField("include_text", e.target.checked)} /> include_text</label>
+          </div>
+          <button className="ask-btn" onClick={handleDebug} disabled={debugLoading || !debugForm.question.trim()}>
+            {debugLoading ? "Running..." : "Run Debug"}
+          </button>
+          {debugLoading && <span className="spinner"></span>}
+          {debugError && <div className="error-msg" style={{marginTop:"12px"}}>{debugError}</div>}
+        </div>
+      )}
+
+      {/* Admin: Debug results */}
+      {adminMode && debugResult && (
+        <div className="debug-results">
+          {renderDebugTable("Pre-Rerank Results", debugResult.pre_rerank, false)}
+          {renderDebugTable("Post-Rerank Results", debugResult.post_rerank, true)}
+
+          {debugResult.context_preview && (
+            <div className="context-preview">
+              <h4>Context Preview</h4>
+              <pre>{debugResult.context_preview}</pre>
+            </div>
+          )}
+
+          {debugResult.sources && debugResult.sources.length > 0 && (
+            <div>
+              <h4 className="sources-heading">Sources</h4>
+              {debugResult.sources.map((s, i) => (
+                <div key={i} className="source-card">
+                  <div className="title">{s.title || "Untitled"}</div>
+                  <div className="section">{s.section}</div>
+                  {s.url && <a href={s.url} target="_blank" rel="noopener noreferrer">{s.url}</a>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Public: Search box (always visible) */}
+      {!adminMode && (
+        <>
+          <div className="search-box">
+            <textarea
+              value={question}
+              onChange={e => setQuestion(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask a question about GMP+ documents..."
+              maxLength={500}
+            />
+            <div className="search-row">
+              <button className="ask-btn" onClick={handleAsk} disabled={loading || !question.trim()}>
+                {loading ? "Thinking..." : "Ask"}
+              </button>
+              {loading && <span className="spinner"></span>}
+              <span className="char-count">{question.length}/500</span>
+            </div>
+          </div>
+
+          {error && <div className="error-msg">{error}</div>}
+
+          {answer && (
+            <div className="answer-panel">
+              <h3>Answer</h3>
+              <div className="answer-text">{answer}</div>
+            </div>
+          )}
+
+          {sources.length > 0 && (
+            <div>
+              <h3 className="sources-heading">Sources</h3>
+              {sources.map((s, i) => (
+                <div key={i} className="source-card">
+                  <div className="title">{s.title || "Untitled"}</div>
+                  <div className="section">{s.section}</div>
+                  {s.url && <a href={s.url} target="_blank" rel="noopener noreferrer">{s.url}</a>}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
