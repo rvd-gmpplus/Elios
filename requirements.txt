@@ -1,0 +1,16 @@
+
+beautifulsoup4==4.12.3
+lxml==5.3.0
+tiktoken==0.7.0
+pandas==2.2.2
+python-dotenv==1.0.1
+requests==2.32.3
+tqdm==4.66.4
+rich==13.7.1
+pydantic==2.8.2
+# Retrieval / hybrid
+pinecone-client==5.0.1
+# Optional, for sentence splitting (we'll wire it up in the next step)
+spacy==3.7.5
+# Optional sparse helpers later
+rapidfuzz==3.9.6

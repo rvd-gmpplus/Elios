@@ -1,0 +1,23 @@
+
+mode: hierarchical_token
+max_tokens: 900           # was 800
+min_tokens: 180
+hard_max_tokens: 1000     # was 950
+base_overlap_tokens: 90
+max_overlap_tokens: 180
+include_heading_in_child: true
+keep_list_blocks_intact: true
+keep_table_blocks_intact: true
+sentence_splitter: spacy
+parent_section_merge_depth: 2
+min_words_merge: 80              # was 60 — merge tiny windows more aggressively
+strip_heading_duplicate: true
+merge_section_bodies_under_words: 30
+
+patterns:
+  chapter: '^(?P<chapter>\d+(?:\.\d+)*)\b'
+  code_heading: '^(?P<code>(TS|CR|BA|MI|S)\s*\d+(?:\.\d+)*)\b'
+  section_letter: '^(?P<section>[a-z])\.(?:\s|$)'
+  annex: '^(annex|appendix)\s+[ivxlcdm0-9]+(?:\s*$|\s*[:\-–—]\s+.+$)'
+  roman_list: '^(?P<roman>[ivxlcdm]+)\.(?:\s|$)'
+  numbered_list_inline: '(?<!\d)(?P<num>\d{1,2})\.\s+'

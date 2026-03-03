@@ -1,0 +1,8 @@
+
+# Step 1: stub config for query-time settings. We’ll refine in Step 4.
+top_k: 24
+min_dense_score: 0.18
+group_by_parent: true
+include_definitions_when_query_matches: true
+return_parent_context: true
+return_siblings: 2

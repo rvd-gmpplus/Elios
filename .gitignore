@@ -1,0 +1,20 @@
+# python
+__pycache__/
+*.pyc
+.venv/
+
+
+# local env & secrets
+.env
+
+# data/artifacts
+data/
+*.jsonl
+*.csv
+*.xlsx
+*.pdf
+*.docx
+*.zip
+
+# OS/editor junk
+.DS_Store

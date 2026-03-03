@@ -1,0 +1,25 @@
+
+hybrid:
+  enabled: true
+  dense_embedding_model: text-embedding-3-large
+  sparse: bm25
+
+pinecone:
+  index: ${PINECONE_INDEX}
+  host: ${PINECONE_HOST}
+  namespace: ${PINECONE_NAMESPACE}
+
+upsert:
+  batch_size: 64
+  max_concurrency: 4
+
+metadata_fields:
+  - doc_title
+  - section_title
+  - section_path
+  - url
+  - language
+  - celex
+  - version_date
+  - is_definition
+  - has_table
