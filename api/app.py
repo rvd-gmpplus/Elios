@@ -1,10 +1,11 @@
 # api/app.py
 from __future__ import annotations
-import os, sys, json, time, uuid, re, logging, contextvars
+import os, sys, json, time, uuid, re, logging, contextvars, csv
 from typing import List, Dict, Any, Optional, Tuple
 
 from fastapi import FastAPI, HTTPException, Header, Query, Request
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
@@ -61,6 +62,23 @@ ocli = OpenAI(api_key=OPENAI_API_KEY)
 
 APP_NAME = "CBV2 RAG API"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+# Load source URL mapping from sources.csv (title → original GMP+ website URL)
+def _load_source_urls():
+    mapping = {}
+    csv_path = Path(__file__).resolve().parent.parent / "sources.csv"
+    try:
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                title = (row.get("title") or "").strip()
+                url = (row.get("url") or "").strip()
+                if title and url:
+                    mapping[title] = url
+    except FileNotFoundError:
+        pass
+    return mapping
+
+SOURCE_URLS = _load_source_urls()
 
 # =========================
 # Helpers
@@ -164,7 +182,7 @@ def as_context(matches: List[Dict[str, Any]], max_chars: int = 12000) -> Tuple[s
         md = _md(m)
         title = md.get("doc_title", "")
         path = md.get("section_path", "")
-        url   = md.get("url", "")
+        url   = SOURCE_URLS.get(title, md.get("url", ""))
         text = _text_from_md(md)
 
         header = f"[{title} — {path}]"
@@ -207,6 +225,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(RequestContextMiddleware)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # ---------- Web UI ----------
 @app.get("/", response_class=FileResponse, include_in_schema=False)

@@ -246,6 +246,43 @@ function App() {
     }
   }, [history]);
 
+  // Preload logo as data URL for PDF export
+  const [logoDataUrl, setLogoDataUrl] = useState(null);
+  useEffect(() => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext("2d").drawImage(img, 0, 0);
+        setLogoDataUrl(canvas.toDataURL("image/png"));
+      } catch (e) { /* optional */ }
+    };
+    img.src = "/static/gmplogo.png";
+  }, []);
+
+  // --- Markdown bold rendering ---
+  function renderMarkdown(text) {
+    if (!text) return null;
+    const parts = [];
+    const regex = /\*\*(.*?)\*\*/g;
+    let lastIndex = 0;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+      parts.push(React.createElement("strong", { key: match.index }, match[1]));
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+    return parts;
+  }
+
   // --- Public Q&A ---
   async function handleAsk() {
     if (!question.trim() || loading) return;
@@ -317,6 +354,42 @@ function App() {
       }
     }
 
+    // Render a single line with inline **bold** segments
+    function pdfBoldLine(doc, text, x, y, fontSize) {
+      const boldRegex = /\*\*(.*?)\*\*/g;
+      let lastIdx = 0;
+      let curX = x;
+      let match;
+      doc.setFontSize(fontSize);
+      while ((match = boldRegex.exec(text)) !== null) {
+        // Normal segment before bold
+        if (match.index > lastIdx) {
+          const seg = text.slice(lastIdx, match.index);
+          doc.setFont(undefined, "normal");
+          doc.text(seg, curX, y);
+          curX += doc.getTextWidth(seg);
+        }
+        // Bold segment
+        const boldSeg = match[1];
+        doc.setFont(undefined, "bold");
+        doc.text(boldSeg, curX, y);
+        curX += doc.getTextWidth(boldSeg);
+        lastIdx = boldRegex.lastIndex;
+      }
+      // Remaining normal text
+      if (lastIdx < text.length) {
+        doc.setFont(undefined, "normal");
+        doc.text(text.slice(lastIdx), curX, y);
+      }
+    }
+
+    // Embed preloaded logo top-right (brand guidelines for PDF reports)
+    if (logoDataUrl) {
+      try {
+        doc.addImage(logoDataUrl, "PNG", pageW - margin - 40, y - 4, 40, 7);
+      } catch (e) { /* logo optional */ }
+    }
+
     // Title
     doc.setFontSize(18);
     doc.setTextColor(104, 89, 167);
@@ -347,15 +420,25 @@ function App() {
       doc.text(qLines, margin, y);
       y += qLines.length * 5 + 4;
 
-      // Answer
+      // Answer with bold support
       checkPage(20);
       doc.setFontSize(10);
-      doc.setFont(undefined, "normal");
       doc.setTextColor(51, 51, 51);
-      const aLines = doc.splitTextToSize(entry.answer || "No answer", contentW);
-      aLines.forEach(line => {
+      doc.setFont(undefined, "normal");
+      const answerText = entry.answer || "No answer";
+      // Split using plain text (without ** markers) for accurate line widths
+      const plainText = answerText.replace(/\*\*(.*?)\*\*/g, "$1");
+      const aLines = doc.splitTextToSize(plainText, contentW);
+      // Also split original to preserve bold markers per line
+      const origLines = doc.splitTextToSize(answerText, contentW);
+      origLines.forEach(line => {
         checkPage(6);
-        doc.text(line, margin, y);
+        if (/\*\*/.test(line)) {
+          pdfBoldLine(doc, line, margin, y, 10);
+        } else {
+          doc.setFont(undefined, "normal");
+          doc.text(line, margin, y);
+        }
         y += 5;
       });
       y += 3;
@@ -544,7 +627,10 @@ function App() {
     <div className="container">
       {/* Header */}
       <div className="header">
-        <h1>Elios &mdash; GMP+ Document Assistant</h1>
+        <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+          <img src="/static/gmplogo.png" alt="GMP+ International" style={{maxHeight:"40px"}} />
+          <h1>Elios &mdash; GMP+ Document Assistant</h1>
+        </div>
         <div className="header-actions">
           {!adminMode && history.length > 0 && (
             <>
@@ -694,7 +780,7 @@ function App() {
                   </div>
                   <div className="answer-panel">
                     <h3>Answer</h3>
-                    <div className="answer-text">{entry.answer}</div>
+                    <div className="answer-text">{renderMarkdown(entry.answer)}</div>
                   </div>
                   {entry.sources.length > 0 && (
                     <div>
