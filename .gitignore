@@ -11,6 +11,7 @@ __pycache__/
 data/
 *.jsonl
 *.csv
+!sources.csv
 *.xlsx
 *.pdf
 *.docx
