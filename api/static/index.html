@@ -7,39 +7,60 @@
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/jspdf@2/dist/jspdf.umd.min.js"></script>
 <style>
+  :root {
+    --gmp-purple: #6859A7;
+    --gmp-purple-dark: #544588;
+    --gmp-green: #38B769;
+    --gmp-green-dark: #2D9A56;
+    --gmp-orange: #EA8004;
+    --gmp-text: #333333;
+    --gmp-light-purple: #E8E5F0;
+    --gmp-light-green: #E5F5EC;
+    --gmp-font: 'Segoe UI', Arial, sans-serif;
+  }
+
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background: #f5f5f5; color: #222; line-height: 1.5;
+    font-family: var(--gmp-font);
+    background: #f5f5f5; color: var(--gmp-text); line-height: 1.5;
   }
   .container { max-width: 800px; margin: 0 auto; padding: 16px; }
 
   /* Header */
   .header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 0; border-bottom: 2px solid #2E7D32; margin-bottom: 24px;
+    padding: 16px 0; border-bottom: 2px solid var(--gmp-purple); margin-bottom: 24px;
   }
-  .header h1 { font-size: 1.4rem; color: #2E7D32; }
+  .header h1 { font-size: 1.4rem; color: var(--gmp-purple); }
+  .header-actions { display: flex; align-items: center; gap: 8px; }
+  .header-btn {
+    padding: 6px 14px; border: 1px solid var(--gmp-purple); background: #fff;
+    color: var(--gmp-purple); border-radius: 6px; cursor: pointer;
+    font-size: 0.85rem; font-family: var(--gmp-font); transition: all 0.2s;
+  }
+  .header-btn:hover { background: var(--gmp-purple); color: #fff; }
   .gear-btn {
     background: none; border: none; cursor: pointer; font-size: 1.4rem;
     color: #666; transition: color 0.2s;
   }
-  .gear-btn:hover { color: #2E7D32; }
+  .gear-btn:hover { color: var(--gmp-purple); }
 
   /* Search */
   .search-box { margin-bottom: 24px; }
   .search-box textarea {
     width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px;
-    font-size: 1rem; font-family: inherit; resize: vertical; min-height: 60px;
+    font-size: 1rem; font-family: var(--gmp-font); resize: vertical; min-height: 60px;
   }
-  .search-box textarea:focus { outline: none; border-color: #2E7D32; }
+  .search-box textarea:focus { outline: none; border-color: var(--gmp-purple); }
   .search-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
   .ask-btn {
-    padding: 10px 24px; background: #2E7D32; color: #fff; border: none;
-    border-radius: 6px; font-size: 1rem; cursor: pointer; transition: background 0.2s;
+    padding: 10px 24px; background: var(--gmp-purple); color: #fff; border: none;
+    border-radius: 6px; font-size: 1rem; font-family: var(--gmp-font);
+    cursor: pointer; transition: background 0.2s;
   }
-  .ask-btn:hover { background: #1B5E20; }
+  .ask-btn:hover { background: var(--gmp-purple-dark); }
   .ask-btn:disabled { background: #999; cursor: not-allowed; }
   .char-count { font-size: 0.8rem; color: #888; }
 
@@ -47,28 +68,44 @@
   .spinner { display: inline-block; margin-left: 12px; }
   .spinner::after {
     content: ""; display: inline-block; width: 18px; height: 18px;
-    border: 2px solid #2E7D32; border-top-color: transparent; border-radius: 50%;
+    border: 2px solid var(--gmp-purple); border-top-color: transparent; border-radius: 50%;
     animation: spin 0.6s linear infinite; vertical-align: middle;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* History entries */
+  .history-container {
+    display: flex; flex-direction: column; gap: 24px;
+  }
+  .history-entry { margin-bottom: 0; }
+
+  .question-bubble {
+    background: var(--gmp-light-purple); border-radius: 12px 12px 4px 12px;
+    padding: 12px 16px; margin-bottom: 12px; max-width: 85%; margin-left: auto;
+    color: var(--gmp-text); font-size: 0.95rem;
+  }
+  .question-bubble .q-label {
+    font-size: 0.75rem; color: var(--gmp-purple); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
+  }
+
   /* Answer panel */
   .answer-panel {
-    background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px;
+    background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 12px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   }
-  .answer-panel h3 { color: #2E7D32; margin-bottom: 8px; font-size: 1rem; }
+  .answer-panel h3 { color: var(--gmp-purple); margin-bottom: 8px; font-size: 1rem; }
   .answer-text { white-space: pre-wrap; }
 
   /* Source cards */
-  .sources-heading { font-size: 1rem; color: #2E7D32; margin-bottom: 8px; }
+  .sources-heading { font-size: 1rem; color: var(--gmp-purple); margin-bottom: 8px; }
   .source-card {
     background: #fff; border-radius: 6px; padding: 12px 16px; margin-bottom: 8px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.08); border-left: 3px solid #2E7D32;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08); border-left: 3px solid var(--gmp-purple);
   }
   .source-card .title { font-weight: 600; }
   .source-card .section { font-size: 0.85rem; color: #555; }
-  .source-card a { color: #2E7D32; font-size: 0.85rem; }
+  .source-card a { color: var(--gmp-purple); font-size: 0.85rem; }
 
   /* Error */
   .error-msg {
@@ -85,40 +122,40 @@
     background: #fff; border-radius: 8px; padding: 24px; width: 360px;
     box-shadow: 0 4px 16px rgba(0,0,0,0.2);
   }
-  .modal h2 { color: #2E7D32; margin-bottom: 12px; font-size: 1.1rem; }
+  .modal h2 { color: var(--gmp-purple); margin-bottom: 12px; font-size: 1.1rem; }
   .modal input {
     width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px;
-    font-size: 1rem; margin-bottom: 12px;
+    font-size: 1rem; font-family: var(--gmp-font); margin-bottom: 12px;
   }
-  .modal input:focus { outline: none; border-color: #2E7D32; }
+  .modal input:focus { outline: none; border-color: var(--gmp-purple); }
   .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
   .btn-secondary {
     padding: 8px 16px; border: 1px solid #ccc; background: #fff; border-radius: 6px;
-    cursor: pointer; font-size: 0.9rem;
+    cursor: pointer; font-size: 0.9rem; font-family: var(--gmp-font);
   }
   .btn-primary {
-    padding: 8px 16px; background: #2E7D32; color: #fff; border: none;
-    border-radius: 6px; cursor: pointer; font-size: 0.9rem;
+    padding: 8px 16px; background: var(--gmp-purple); color: #fff; border: none;
+    border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-family: var(--gmp-font);
   }
   .btn-primary:disabled { background: #999; }
   .btn-danger {
     padding: 8px 16px; background: #C62828; color: #fff; border: none;
-    border-radius: 6px; cursor: pointer; font-size: 0.9rem;
+    border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-family: var(--gmp-font);
   }
 
   /* Admin panels */
   .admin-bar {
     display: flex; align-items: center; justify-content: space-between;
-    background: #E8F5E9; padding: 8px 12px; border-radius: 6px; margin-bottom: 16px;
+    background: var(--gmp-light-purple); padding: 8px 12px; border-radius: 6px; margin-bottom: 16px;
   }
-  .admin-bar span { font-weight: 600; color: #2E7D32; }
+  .admin-bar span { font-weight: 600; color: var(--gmp-purple); }
 
   .health-panel {
     background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   }
-  .health-panel h3 { color: #2E7D32; margin-bottom: 8px; }
-  .health-ok { color: #2E7D32; font-weight: 600; }
+  .health-panel h3 { color: var(--gmp-purple); margin-bottom: 8px; }
+  .health-ok { color: var(--gmp-green); font-weight: 600; }
   .health-err { color: #C62828; font-weight: 600; }
 
   /* Debug form */
@@ -126,23 +163,24 @@
     background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   }
-  .debug-form h3 { color: #2E7D32; margin-bottom: 12px; }
+  .debug-form h3 { color: var(--gmp-purple); margin-bottom: 12px; }
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-bottom: 12px; }
   .form-field label { display: block; font-size: 0.85rem; color: #555; margin-bottom: 2px; }
   .form-field input[type="number"],
   .form-field input[type="text"] {
     width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem;
+    font-family: var(--gmp-font);
   }
-  .form-field input:focus { outline: none; border-color: #2E7D32; }
+  .form-field input:focus { outline: none; border-color: var(--gmp-purple); }
   .checkbox-row { display: flex; gap: 16px; align-items: center; margin-bottom: 12px; }
   .checkbox-row label { font-size: 0.9rem; display: flex; align-items: center; gap: 4px; }
 
   /* Debug tables */
   .debug-results { margin-bottom: 16px; }
-  .debug-results h4 { color: #2E7D32; margin-bottom: 8px; }
+  .debug-results h4 { color: var(--gmp-purple); margin-bottom: 8px; }
   .debug-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-bottom: 16px; }
   .debug-table th {
-    background: #2E7D32; color: #fff; padding: 6px 8px; text-align: left; font-weight: 600;
+    background: var(--gmp-purple); color: #fff; padding: 6px 8px; text-align: left; font-weight: 600;
   }
   .debug-table td { padding: 6px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
   .debug-table tr:nth-child(even) td { background: #FAFAFA; }
@@ -152,11 +190,18 @@
     background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   }
-  .context-preview h4 { color: #2E7D32; margin-bottom: 8px; }
+  .context-preview h4 { color: var(--gmp-purple); margin-bottom: 8px; }
   .context-preview pre {
     white-space: pre-wrap; font-size: 0.82rem; max-height: 300px; overflow-y: auto;
     background: #F5F5F5; padding: 12px; border-radius: 4px;
   }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center; padding: 48px 16px; color: #888;
+  }
+  .empty-state .icon { font-size: 2.5rem; margin-bottom: 12px; }
+  .empty-state p { font-size: 0.95rem; }
 </style>
 </head>
 <body>
@@ -167,10 +212,10 @@ const { useState, useEffect, useRef, useCallback } = React;
 function App() {
   // Public state
   const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState(null);
-  const [sources, setSources] = useState([]);
+  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const historyEndRef = useRef(null);
 
   // Admin state
   const [adminMode, setAdminMode] = useState(false);
@@ -194,28 +239,39 @@ function App() {
   const [debugLoading, setDebugLoading] = useState(false);
   const [debugError, setDebugError] = useState(null);
 
+  // Auto-scroll to latest history entry
+  useEffect(() => {
+    if (historyEndRef.current) {
+      historyEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [history]);
+
   // --- Public Q&A ---
   async function handleAsk() {
     if (!question.trim() || loading) return;
+    const askedQuestion = question.trim();
     setLoading(true);
     setError(null);
-    setAnswer(null);
-    setSources([]);
+    setQuestion("");
     try {
       const res = await fetch("/web/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: question.trim() }),
+        body: JSON.stringify({ question: askedQuestion }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.detail || `Error ${res.status}`);
       }
       const data = await res.json();
-      setAnswer(data.answer);
-      setSources(data.sources || []);
+      setHistory(prev => [...prev, {
+        question: askedQuestion,
+        answer: data.answer,
+        sources: data.sources || [],
+      }]);
     } catch (e) {
       setError(e.message || "Something went wrong. Please try again.");
+      setQuestion(askedQuestion);
     } finally {
       setLoading(false);
     }
@@ -228,9 +284,120 @@ function App() {
     }
   }
 
+  function handleNewChat() {
+    setHistory([]);
+    setQuestion("");
+    setError(null);
+  }
+
+  // --- Export PDF ---
+  function handleExport() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    const contentW = pageW - margin * 2;
+    let y = margin;
+
+    function checkPage(needed) {
+      if (y + needed > pageH - 25) {
+        doc.addPage();
+        y = margin;
+      }
+    }
+
+    function addPageNumbers() {
+      const total = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= total; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(136, 136, 136);
+        doc.text(`Page ${i} of ${total}`, pageW / 2, pageH - 10, { align: "center" });
+      }
+    }
+
+    // Title
+    doc.setFontSize(18);
+    doc.setTextColor(104, 89, 167);
+    doc.text("Elios — GMP+ Document Assistant", margin, y);
+    y += 8;
+
+    // Export date
+    doc.setFontSize(9);
+    doc.setTextColor(136, 136, 136);
+    const now = new Date();
+    doc.text(`Exported: ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`, margin, y);
+    y += 6;
+
+    // Purple rule
+    doc.setDrawColor(104, 89, 167);
+    doc.setLineWidth(0.5);
+    doc.line(margin, y, pageW - margin, y);
+    y += 10;
+
+    history.forEach((entry, idx) => {
+      checkPage(30);
+
+      // Question
+      doc.setFontSize(11);
+      doc.setFont(undefined, "bold");
+      doc.setTextColor(104, 89, 167);
+      const qLines = doc.splitTextToSize(`Q: ${entry.question}`, contentW);
+      doc.text(qLines, margin, y);
+      y += qLines.length * 5 + 4;
+
+      // Answer
+      checkPage(20);
+      doc.setFontSize(10);
+      doc.setFont(undefined, "normal");
+      doc.setTextColor(51, 51, 51);
+      const aLines = doc.splitTextToSize(entry.answer || "No answer", contentW);
+      aLines.forEach(line => {
+        checkPage(6);
+        doc.text(line, margin, y);
+        y += 5;
+      });
+      y += 3;
+
+      // Sources
+      if (entry.sources && entry.sources.length > 0) {
+        checkPage(10);
+        doc.setFontSize(9);
+        doc.setFont(undefined, "bold");
+        doc.setTextColor(104, 89, 167);
+        doc.text("Sources:", margin, y);
+        y += 5;
+        doc.setFont(undefined, "normal");
+        doc.setTextColor(85, 85, 85);
+        entry.sources.forEach(s => {
+          checkPage(6);
+          const srcText = `• ${s.title || "Untitled"}${s.section ? " — " + s.section : ""}`;
+          const srcLines = doc.splitTextToSize(srcText, contentW - 4);
+          doc.text(srcLines, margin + 2, y);
+          y += srcLines.length * 4 + 2;
+        });
+      }
+
+      // Separator between entries
+      if (idx < history.length - 1) {
+        y += 4;
+        checkPage(6);
+        doc.setDrawColor(104, 89, 167);
+        doc.setLineWidth(0.3);
+        doc.line(margin, y, pageW - margin, y);
+        y += 8;
+      }
+    });
+
+    addPageNumbers();
+    const dateStr = now.toISOString().slice(0, 10);
+    doc.save(`elios-export-${dateStr}.pdf`);
+  }
+
   // --- Admin toggle ---
   function handleGearClick() {
-    if (adminMode) return; // already in admin, do nothing
+    if (adminMode) return;
     if (token) {
       setAdminMode(true);
     } else {
@@ -378,7 +545,15 @@ function App() {
       {/* Header */}
       <div className="header">
         <h1>Elios &mdash; GMP+ Document Assistant</h1>
-        <button className="gear-btn" onClick={handleGearClick} title="Admin panel">&#9881;</button>
+        <div className="header-actions">
+          {!adminMode && history.length > 0 && (
+            <>
+              <button className="header-btn" onClick={handleNewChat}>New Chat</button>
+              <button className="header-btn" onClick={handleExport}>Export</button>
+            </>
+          )}
+          <button className="gear-btn" onClick={handleGearClick} title="Admin panel">&#9881;</button>
+        </div>
       </div>
 
       {/* Admin bar */}
@@ -440,7 +615,7 @@ function App() {
           <div style={{marginBottom:"12px"}}>
             <label style={{fontSize:"0.85rem",color:"#555"}}>Question</label>
             <textarea
-              style={{width:"100%",padding:"8px",border:"1px solid #ccc",borderRadius:"4px",fontFamily:"inherit",fontSize:"0.9rem",minHeight:"50px",resize:"vertical"}}
+              style={{width:"100%",padding:"8px",border:"1px solid #ccc",borderRadius:"4px",fontFamily:"var(--gmp-font)",fontSize:"0.9rem",minHeight:"50px",resize:"vertical"}}
               value={debugForm.question}
               onChange={e => updateDebugField("question", e.target.value)}
               placeholder="Enter debug question..."
@@ -505,10 +680,57 @@ function App() {
         </div>
       )}
 
-      {/* Public: Search box (always visible) */}
+      {/* Public: Search box + history */}
       {!adminMode && (
         <>
-          <div className="search-box">
+          {/* History */}
+          {history.length > 0 ? (
+            <div className="history-container">
+              {history.map((entry, i) => (
+                <div key={i} className="history-entry">
+                  <div className="question-bubble">
+                    <div className="q-label">You</div>
+                    {entry.question}
+                  </div>
+                  <div className="answer-panel">
+                    <h3>Answer</h3>
+                    <div className="answer-text">{entry.answer}</div>
+                  </div>
+                  {entry.sources.length > 0 && (
+                    <div>
+                      <h3 className="sources-heading">Sources</h3>
+                      {entry.sources.map((s, j) => (
+                        <div key={j} className="source-card">
+                          <div className="title">{s.title || "Untitled"}</div>
+                          <div className="section">{s.section}</div>
+                          {s.url && <a href={s.url} target="_blank" rel="noopener noreferrer">{s.url}</a>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div ref={historyEndRef} />
+            </div>
+          ) : (
+            <div className="empty-state">
+              <div className="icon">📋</div>
+              <p>Ask a question about GMP+ documents to get started.</p>
+            </div>
+          )}
+
+          {/* Loading indicator between history and input */}
+          {loading && (
+            <div style={{textAlign:"center",padding:"16px 0"}}>
+              <span className="spinner" style={{marginLeft:0}}></span>
+              <span style={{marginLeft:"8px",color:"#888",fontSize:"0.9rem"}}>Thinking...</span>
+            </div>
+          )}
+
+          {error && <div className="error-msg">{error}</div>}
+
+          {/* Search box (always at bottom) */}
+          <div className="search-box" style={{marginTop:"16px"}}>
             <textarea
               value={question}
               onChange={e => setQuestion(e.target.value)}
@@ -518,34 +740,11 @@ function App() {
             />
             <div className="search-row">
               <button className="ask-btn" onClick={handleAsk} disabled={loading || !question.trim()}>
-                {loading ? "Thinking..." : "Ask"}
+                Ask
               </button>
-              {loading && <span className="spinner"></span>}
               <span className="char-count">{question.length}/500</span>
             </div>
           </div>
-
-          {error && <div className="error-msg">{error}</div>}
-
-          {answer && (
-            <div className="answer-panel">
-              <h3>Answer</h3>
-              <div className="answer-text">{answer}</div>
-            </div>
-          )}
-
-          {sources.length > 0 && (
-            <div>
-              <h3 className="sources-heading">Sources</h3>
-              {sources.map((s, i) => (
-                <div key={i} className="source-card">
-                  <div className="title">{s.title || "Untitled"}</div>
-                  <div className="section">{s.section}</div>
-                  {s.url && <a href={s.url} target="_blank" rel="noopener noreferrer">{s.url}</a>}
-                </div>
-              ))}
-            </div>
-          )}
         </>
       )}
     </div>
