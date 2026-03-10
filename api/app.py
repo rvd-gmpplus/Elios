@@ -149,7 +149,7 @@ def _has_body(m: Dict[str, Any]) -> bool:
 
 def answer_with_openai(question: str, context: str) -> str:
     resp = ocli.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5-mini",
         temperature=0.2,
         messages=[
             {"role": "system", "content": (
@@ -182,7 +182,7 @@ def rerank_with_llm(query: str, matches: List[Dict[str, Any]]) -> List[Dict[str,
         "instruction": 'Return JSON: [{"id": str, "score": float 0..5}] in same order.'
     }
     resp = ocli.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5-nano",
         temperature=0,
         messages=[
             {"role": "system", "content": "You are a re-ranking engine. Score each chunk 0 to 5 by how well it answers the question."},
