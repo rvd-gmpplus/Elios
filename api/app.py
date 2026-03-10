@@ -152,7 +152,12 @@ def answer_with_openai(question: str, context: str) -> str:
         model="gpt-4o-mini",
         temperature=0.2,
         messages=[
-            {"role": "system", "content": "Answer strictly from the provided context. If not present, say you do not know."},
+            {"role": "system", "content": (
+                "You are a GMP+ Document Assistant. Answer based on the provided context only. "
+                "If the context contains relevant guidance or methodology (even without a specific numeric limit), "
+                "summarise that guidance and explain how it applies to the question. "
+                "Only say you do not know if the context contains nothing relevant to the question at all."
+            )},
             {"role": "user", "content": f"Question:\n{question}\n\nContext:\n{context}"}
         ]
     )
