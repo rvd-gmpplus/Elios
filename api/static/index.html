@@ -429,12 +429,41 @@ function App() {
       // Split using plain text (without ** markers) for accurate line widths
       const plainText = answerText.replace(/\*\*(.*?)\*\*/g, "$1");
       const aLines = doc.splitTextToSize(plainText, contentW);
-      // Also split original to preserve bold markers per line
-      const origLines = doc.splitTextToSize(answerText, contentW);
-      origLines.forEach(line => {
+
+      // Build a per-character bold map over plainText
+      const boldMap = [];
+      {
+        const re = /\*\*(.*?)\*\*/g;
+        let bm, oi = 0;
+        while ((bm = re.exec(answerText)) !== null) {
+          const before = answerText.slice(oi, bm.index).replace(/\*\*/g, "");
+          for (let i = 0; i < before.length; i++) boldMap.push(false);
+          for (let i = 0; i < bm[1].length; i++) boldMap.push(true);
+          oi = re.lastIndex;
+        }
+        const rest = answerText.slice(oi).replace(/\*\*/g, "");
+        for (let i = 0; i < rest.length; i++) boldMap.push(false);
+      }
+
+      // Render each plain-text line, re-inserting ** markers from boldMap
+      let charIdx = 0;
+      aLines.forEach(line => {
         checkPage(6);
-        if (/\*\*/.test(line)) {
-          pdfBoldLine(doc, line, margin, y, 10);
+        let rebuilt = "";
+        let inBold = false;
+        for (let i = 0; i < line.length; i++) {
+          const b = boldMap[charIdx + i] || false;
+          if (b && !inBold) { rebuilt += "**"; inBold = true; }
+          if (!b && inBold) { rebuilt += "**"; inBold = false; }
+          rebuilt += line[i];
+        }
+        if (inBold) rebuilt += "**";
+        charIdx += line.length;
+        // Skip whitespace between lines consumed by splitTextToSize
+        while (charIdx < boldMap.length && plainText[charIdx] === " ") charIdx++;
+
+        if (/\*\*/.test(rebuilt)) {
+          pdfBoldLine(doc, rebuilt, margin, y, 10);
         } else {
           doc.setFont(undefined, "normal");
           doc.text(line, margin, y);
@@ -458,7 +487,16 @@ function App() {
           const srcText = `• ${s.title || "Untitled"}${s.section ? " — " + s.section : ""}`;
           const srcLines = doc.splitTextToSize(srcText, contentW - 4);
           doc.text(srcLines, margin + 2, y);
-          y += srcLines.length * 4 + 2;
+          y += srcLines.length * 4 + 1;
+
+          if (s.url) {
+            checkPage(5);
+            doc.setTextColor(0, 0, 238);
+            doc.textWithLink(s.url, margin + 4, y, { url: s.url });
+            doc.setTextColor(85, 85, 85);
+            y += 4;
+          }
+          y += 1;
         });
       }
 
