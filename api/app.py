@@ -150,7 +150,8 @@ def _has_body(m: Dict[str, Any]) -> bool:
 def answer_with_openai(question: str, context: str) -> str:
     resp = ocli.chat.completions.create(
         model="gpt-5-mini",
-        temperature=0.2,
+        reasoning={"effort": "minimal", "summary": "detailed"},
+        verbosity="low",
         messages=[
             {"role": "system", "content": (
                 "You are a GMP+ Document Assistant. Answer based on the provided context only. "
@@ -183,7 +184,8 @@ def rerank_with_llm(query: str, matches: List[Dict[str, Any]]) -> List[Dict[str,
     }
     resp = ocli.chat.completions.create(
         model="gpt-5-nano",
-        temperature=0,
+        reasoning={"effort": "minimal", "summary": "detailed"},
+        verbosity="low",
         messages=[
             {"role": "system", "content": "You are a re-ranking engine. Score each chunk 0 to 5 by how well it answers the question."},
             {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)}
