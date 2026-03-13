@@ -73,7 +73,7 @@ def main():
 
     out_path = pathlib.Path(args.out)
     write_jsonl(out_path, docs)
-    print(f"\u2714 Wrote {len(docs)} chunks -> {out_path}")
+    print(f"[OK] Wrote {len(docs)} chunks -> {out_path}")
 
 if __name__ == "__main__":
     main()

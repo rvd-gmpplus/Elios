@@ -40,7 +40,7 @@ def main():
         total += len(vecs)
         print(f"Upserted {total}/{len(rows)}")
 
-    print(f"✔ Done. Upserted {total} vectors into namespace '{namespace}'.")
+    print(f"[OK] Done. Upserted {total} vectors into namespace '{namespace}'.")
 
 if __name__ == "__main__":
     main()

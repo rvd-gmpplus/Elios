@@ -20,4 +20,4 @@ with open("data/processed/chunks.jsonl") as f:
         if count % 100 == 0:
             print(f"Updated {count} chunks...")
 
-print(f"✅ Completed: updated metadata (URLs) for {count} chunks in namespace '{namespace}'.")
+print(f"[OK] Completed: updated metadata (URLs) for {count} chunks in namespace '{namespace}'.")

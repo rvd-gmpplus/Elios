@@ -50,7 +50,7 @@ def main(csv_path="sources.csv"):
             time.sleep(0.2)  # be gentle
         except Exception as e:
             print(f"[{i}/{len(rows)}] FAIL    {url}  -> {e}")
-    print(f"✔ Done. Downloaded {ok} files into {RAW_DIR}")
+    print(f"[OK] Done. Downloaded {ok} files into {RAW_DIR}")
 
 if __name__ == "__main__":
     # allow: PYTHONPATH=. python scripts/fetch_from_csv.py sources.csv
