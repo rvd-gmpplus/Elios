@@ -184,7 +184,7 @@ def rerank_with_llm(query: str, matches: List[Dict[str, Any]]) -> List[Dict[str,
     }
     resp = ocli.chat.completions.create(
         model="gpt-5-nano",
-        reasoning={"effort": "minimal", "summary": "detailed"},
+        reasoning={"effort": "minimal", "summary": None},
         verbosity="low",
         messages=[
             {"role": "system", "content": "You are a re-ranking engine. Score each chunk 0 to 5 by how well it answers the question."},
